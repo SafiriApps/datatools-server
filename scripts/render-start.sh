@@ -49,6 +49,7 @@ application:
     gtfs: ${GTFS_DATA_DIR:-/var/data/gtfs}
     use_s3_storage: ${USE_S3_STORAGE:-false}
     s3_region: ${S3_REGION:-us-east-1}
+    s3_endpoint: ${S3_ENDPOINT:-}
     gtfs_s3_bucket: ${GTFS_S3_BUCKET:-}
 modules:
   enterprise:

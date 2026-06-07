@@ -5,6 +5,7 @@ import com.amazonaws.HttpMethod;
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
 import com.amazonaws.auth.profile.ProfileCredentialsProvider;
+import com.amazonaws.client.builder.AwsClientBuilder;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.model.CannedAccessControlList;
@@ -60,9 +61,7 @@ public class S3Utils {
                 // If region configuration string is provided, use that.
                 // Otherwise defaults to value provided in ~/.aws/config
                 String region = DataManager.getConfigPropertyAsText("application.data.s3_region");
-                if (region != null) {
-                    builder.withRegion(region);
-                }
+                configureEndpointOrRegion(builder, region);
                 tempS3Client = builder.build();
             } catch (Exception e) {
                 LOG.error(
@@ -118,7 +117,9 @@ public class S3Utils {
 
         @Override
         public AmazonS3 buildDefaultClientWithRegion(String region) {
-            return AmazonS3ClientBuilder.standard().withCredentials(DEFAULT_S3_CREDENTIALS).withRegion(region).build();
+            AmazonS3ClientBuilder builder = AmazonS3ClientBuilder.standard().withCredentials(DEFAULT_S3_CREDENTIALS);
+            configureEndpointOrRegion(builder, region);
+            return builder.build();
         }
 
         @Override
@@ -126,8 +127,22 @@ public class S3Utils {
             AWSCredentialsProvider credentials, String region, String role
         ) {
             AmazonS3ClientBuilder builder = AmazonS3ClientBuilder.standard();
-            if (region != null) builder.withRegion(region);
+            configureEndpointOrRegion(builder, region);
             return builder.withCredentials(credentials).build();
+        }
+    }
+
+    private static void configureEndpointOrRegion(AmazonS3ClientBuilder builder, String region) {
+        String endpoint = DataManager.getConfigPropertyAsText("application.data.s3_endpoint");
+        String configuredRegion = region != null
+            ? region
+            : DataManager.getConfigPropertyAsText("application.data.s3_region");
+        if (endpoint != null && !endpoint.isEmpty()) {
+            builder.withEndpointConfiguration(
+                new AwsClientBuilder.EndpointConfiguration(endpoint, configuredRegion)
+            );
+        } else if (configuredRegion != null && !configuredRegion.isEmpty()) {
+            builder.withRegion(configuredRegion);
         }
     }
 
