@@ -113,6 +113,7 @@
                 </executions>
                 <configuration>
                     <dotGitDirectory>${project.basedir}/.git</dotGitDirectory>
+                    <failOnNoGitDirectory>false</failOnNoGitDirectory>
                     <!-- the below line will automatically generate the git properties file which is needed for the
                      SeverController to fully function.
                     -->
