@@ -12,6 +12,7 @@ datatools.iml
 datatools-manager.iml
 tmp/
 deploy/
+.local/
 
 # Configurations
 configurations/*.yml

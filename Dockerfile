@@ -8,13 +8,15 @@ WORKDIR /datatools
 RUN mvn package -DskipTests
 RUN cp target/dt*.jar /datatools/
 RUN mv dt*.jar datatools-server.jar
+RUN chmod +x scripts/render-start.sh
 
 RUN mkdir -p /var/datatools_gtfs/gtfsplus
 # MTC (QA and prod) uses the folder below.
 RUN mkdir -p /var/gtfs/manager/gtfs/gtfsplus
+RUN mkdir -p /var/data/gtfs
 
 # Launch server
 # This relies on a configuration volume and aws volume being present. See `docker-compose.yml`, or the example below
 # Try: docker run --publish 4000:4000 -v ~/config/:/config datatools-latest
-CMD ["java", "-XX:MaxRAMPercentage=95", "-jar", "datatools-server.jar", "/config/env.yml", "/config/server.yml"]
+CMD ["scripts/render-start.sh"]
 EXPOSE 4000
