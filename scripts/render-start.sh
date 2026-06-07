@@ -8,13 +8,13 @@ SERVER_FILE="${SERVER_FILE:-$CONFIG_DIR/server.yml}"
 mkdir -p "$CONFIG_DIR"
 
 if [ ! -f "$ENV_FILE" ]; then
+  AUTH0_PUBLIC_KEY_VALUE="${AUTH0_PUBLIC_KEY:-}"
+  if [ -n "${AUTH0_PUBLIC_KEY_TEXT:-}" ]; then
+    AUTH0_PUBLIC_KEY_VALUE="$CONFIG_DIR/auth0.pem"
+    printf "%s\n" "$AUTH0_PUBLIC_KEY_TEXT" > "$AUTH0_PUBLIC_KEY_VALUE"
+  fi
+
   cat > "$ENV_FILE" <<EOF
-AUTH0_CLIENT_ID: ${AUTH0_CLIENT_ID:-}
-AUTH0_DOMAIN: ${AUTH0_DOMAIN:-}
-AUTH0_SECRET: ${AUTH0_SECRET:-}
-AUTH0_PUBLIC_KEY: ${AUTH0_PUBLIC_KEY:-}
-AUTH0_API_CLIENT: ${AUTH0_API_CLIENT:-}
-AUTH0_API_SECRET: ${AUTH0_API_SECRET:-}
 DISABLE_AUTH: ${DISABLE_AUTH:-false}
 OSM_VEX: ${OSM_VEX:-}
 SPARKPOST_KEY: ${SPARKPOST_KEY:-}
@@ -29,6 +29,25 @@ MONGO_DB_NAME: ${MONGO_DB_NAME:-datatools}
 MONGO_USER: ${MONGO_USER:-}
 MONGO_PASSWORD: ${MONGO_PASSWORD:-}
 EOF
+
+  if [ -n "${AUTH0_CLIENT_ID:-}" ]; then
+    printf "AUTH0_CLIENT_ID: %s\n" "$AUTH0_CLIENT_ID" >> "$ENV_FILE"
+  fi
+  if [ -n "${AUTH0_DOMAIN:-}" ]; then
+    printf "AUTH0_DOMAIN: %s\n" "$AUTH0_DOMAIN" >> "$ENV_FILE"
+  fi
+  if [ -n "${AUTH0_SECRET:-}" ]; then
+    printf "AUTH0_SECRET: %s\n" "$AUTH0_SECRET" >> "$ENV_FILE"
+  fi
+  if [ -n "$AUTH0_PUBLIC_KEY_VALUE" ]; then
+    printf "AUTH0_PUBLIC_KEY: %s\n" "$AUTH0_PUBLIC_KEY_VALUE" >> "$ENV_FILE"
+  fi
+  if [ -n "${AUTH0_API_CLIENT:-}" ]; then
+    printf "AUTH0_API_CLIENT: %s\n" "$AUTH0_API_CLIENT" >> "$ENV_FILE"
+  fi
+  if [ -n "${AUTH0_API_SECRET:-}" ]; then
+    printf "AUTH0_API_SECRET: %s\n" "$AUTH0_API_SECRET" >> "$ENV_FILE"
+  fi
 fi
 
 if [ ! -f "$SERVER_FILE" ]; then
