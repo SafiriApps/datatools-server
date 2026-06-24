@@ -12,6 +12,7 @@ import com.conveyal.datatools.manager.models.transform.DbTransformation;
 import com.conveyal.datatools.manager.models.transform.FeedTransformDbTarget;
 import com.conveyal.datatools.manager.models.transform.FeedTransformRules;
 import com.conveyal.datatools.manager.models.transform.FeedTransformZipTarget;
+import com.conveyal.datatools.manager.models.transform.NormalizeStopTimeFieldsTransformation;
 import com.conveyal.datatools.manager.models.transform.RemoveNonRevenueTripsTransformation;
 import com.conveyal.datatools.manager.models.transform.ZipTransformation;
 import com.fasterxml.jackson.annotation.JsonIgnore;
@@ -109,6 +110,9 @@ public class ProcessSingleFeedJob extends FeedVersionJob {
             zipTransformations.addAll(rules.getActiveTransformations(feedVersion, ZipTransformation.class));
         }
 
+        // Run this after all configured zip transformations so stop_times.txt is loader-safe immediately before import.
+        zipTransformations.add(new NormalizeStopTimeFieldsTransformation());
+
         if (!zipTransformations.isEmpty()) {
             // Run zip transformations before load to handle any operations that must be applied directly to the zip file.
             FeedTransformZipTarget zipTarget = new FeedTransformZipTarget(feedVersion.retrieveGtfsFile());
@@ -123,7 +127,9 @@ public class ProcessSingleFeedJob extends FeedVersionJob {
                 }
             }
             // Assign transform result from zip target.
-            feedVersion.feedTransformResult = zipTarget.feedTransformResult;
+            if (!zipTarget.feedTransformResult.tableTransformResults.isEmpty()) {
+                feedVersion.feedTransformResult = zipTarget.feedTransformResult;
+            }
         }
 
         // First, load the feed into database. During this stage, the GTFS file will be uploaded to S3 (and deleted locally).
