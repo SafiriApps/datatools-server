@@ -14,6 +14,7 @@ import com.conveyal.gtfs.loader.Table;
 import com.conveyal.gtfs.model.Entity;
 import com.conveyal.gtfs.storage.StorageException;
 import com.conveyal.gtfs.util.InvalidNamespaceException;
+import com.conveyal.gtfs.util.Util;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -30,6 +31,7 @@ import java.io.IOException;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -65,6 +67,7 @@ public abstract class EditorController<T extends Entity> {
     private static final ObjectMapper mapper = new ObjectMapper();
     public static final JsonManager<Entity> json = new JsonManager<>(Entity.class, JsonViews.UserInterface.class);
     private final Table table;
+    private static final Object PATTERN_CREATE_LOCK = new Object();
     // List of operators used to construct where clauses. Derived from list maintained for Postgrest:
     // https://github.com/PostgREST/postgrest/blob/75a42b77ea59724cd8b5020781ac8685100667f8/src/PostgREST/Types.hs#L298-L316
     // Postgrest docs: http://postgrest.org/en/v6.0/api.html#operators
@@ -472,11 +475,22 @@ public abstract class EditorController<T extends Entity> {
         Integer id = getIdFromRequest(req);
         // Save or update to database
         try {
-            JdbcTableWriter tableWriter = new JdbcTableWriter(table, datasource, namespace);
             String jsonBody = req.body();
             if (isCreating) {
+                if (table.name.equals(Table.PATTERNS.name)) {
+                    synchronized (PATTERN_CREATE_LOCK) {
+                        String existingPattern = getExistingPatternByPatternId(namespace, jsonBody);
+                        if (existingPattern != null) {
+                            return existingPattern;
+                        }
+                        JdbcTableWriter tableWriter = new JdbcTableWriter(table, datasource, namespace);
+                        return tableWriter.create(jsonBody, true);
+                    }
+                }
+                JdbcTableWriter tableWriter = new JdbcTableWriter(table, datasource, namespace);
                 return tableWriter.create(jsonBody, true);
             } else {
+                JdbcTableWriter tableWriter = new JdbcTableWriter(table, datasource, namespace);
                 return update(tableWriter, id, jsonBody);
             }
         } catch (InvalidNamespaceException e) {
@@ -490,6 +504,37 @@ public abstract class EditorController<T extends Entity> {
             LOG.info("{} operation took {} msec", operation, System.currentTimeMillis() - startTime);
         }
         return null;
+    }
+
+    /**
+     * Pattern creation can be submitted twice from the UI if a user action races
+     * the save/refetch cycle. Treat a repeated generated pattern_id as an
+     * idempotent create instead of inserting a duplicate row.
+     */
+    private String getExistingPatternByPatternId(String namespace, String jsonBody) throws IOException, InvalidNamespaceException, SQLException {
+        Util.ensureValidNamespace(namespace);
+        JsonNode pattern = mapper.readTree(jsonBody);
+        JsonNode patternIdNode = pattern.get("pattern_id");
+        if (patternIdNode == null || patternIdNode.isNull() || patternIdNode.asText().isEmpty()) {
+            return null;
+        }
+        try (Connection connection = datasource.getConnection()) {
+            PreparedStatement statement = connection.prepareStatement(
+                String.format("select * from %s.%s where pattern_id = ? limit 1", namespace, Table.PATTERNS.name)
+            );
+            statement.setString(1, patternIdNode.asText());
+            try (statement; ResultSet resultSet = statement.executeQuery()) {
+                if (!resultSet.next()) {
+                    return null;
+                }
+                ObjectNode existingPattern = mapper.createObjectNode();
+                ResultSetMetaData metadata = resultSet.getMetaData();
+                for (int i = 1; i <= metadata.getColumnCount(); i++) {
+                    existingPattern.set(metadata.getColumnName(i), mapper.valueToTree(resultSet.getObject(i)));
+                }
+                return existingPattern.toString();
+            }
+        }
     }
 
     /**

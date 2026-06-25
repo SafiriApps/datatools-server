@@ -247,6 +247,39 @@ public class EditorControllerTest extends UnitTest {
     }
 
     /**
+     * Confirm that repeated pattern creation with the same pattern_id is idempotent.
+     */
+    @Test
+    void canCreatePatternIdempotently() throws IOException, SQLException {
+        FeedSource freshFeedSource = Persistence.feedSources.getById(feedVersion.feedSourceId);
+        String patternId = String.format("DUPLICATE_PATTERN_%s", System.currentTimeMillis());
+        String url = String.format("/api/editor/secure/pattern?feedId=%s&sessionId=test", feedVersion.feedSourceId);
+        String payload =
+            "{" +
+                "\"pattern_id\":\"" + patternId + "\"," +
+                "\"route_id\":\"01\"," +
+                "\"name\":\"Duplicate pattern guard\"," +
+                "\"direction_id\":0," +
+                "\"use_frequency\":0," +
+                "\"shape_id\":\"\"," +
+                "\"pattern_stops\":[]," +
+                "\"shapes\":[]" +
+            "}";
+
+        String response = makeRequest(Method.POST, url, payload);
+        JsonNode json = mapper.readTree(response);
+        String id = json.get("id").asText();
+        assertEquals(patternId, json.get("pattern_id").asText());
+
+        response = makeRequest(Method.POST, url, payload);
+        json = mapper.readTree(response);
+        assertEquals(id, json.get("id").asText());
+        assertEquals(patternId, json.get("pattern_id").asText());
+
+        assertThatSqlCountQueryYieldsExpectedCount(getPatternCountSql(freshFeedSource.editorNamespace, patternId), 1);
+    }
+
+    /**
      * Make request and return the response.
      */
     private static String makeRequest(Method method, String path, Object payload) {
@@ -295,6 +328,17 @@ public class EditorControllerTest extends UnitTest {
             namespace,
             tableName,
             stopId
+        );
+    }
+
+    /**
+     * Build a sql statement to provide a count on the number of rows matching the pattern id.
+     */
+    private static String getPatternCountSql(String namespace, String patternId) {
+        return String.format(
+            "SELECT count(*) FROM %s.patterns WHERE pattern_id = '%s'",
+            namespace,
+            patternId
         );
     }
 }
